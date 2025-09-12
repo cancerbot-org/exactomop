@@ -169,36 +169,26 @@ class Command(BaseCommand):
 
     def generate_patient(self, patient_num):
         """Generate a complete breast cancer patient"""
-        
         # Demographics
         person = self.create_person(patient_num)
-        
         # Breast cancer diagnosis
-        self.create_breast_cancer_diagnosis(person)
-        
+        diagnosis_date = self.create_breast_cancer_diagnosis(person)
         # Laboratory values
         self.create_lab_values(person)
-        
         # Biomarkers
-        self.create_biomarkers(person)
-        
+        self.create_biomarkers(person, diagnosis_date)
         # Genomic data
         self.create_genomic_data(person)
-        
         # Treatment regimens
         self.create_treatment_regimens(person)
-        
         # Treatment lines
         self.create_treatment_lines(person)
-        
         # Procedures
-        self.create_procedures(person)
-        
+        self.create_procedures(person, diagnosis_date)
         # Social determinants
         self.create_social_determinants(person)
-        
         # Episode tracking
-        self.create_episodes(person)
+        self.create_episodes(person, diagnosis_date)
 
     def create_person(self, patient_num):
         """Create a person with realistic demographics"""
@@ -234,16 +224,13 @@ class Command(BaseCommand):
         return person
 
     def create_breast_cancer_diagnosis(self, person):
-        """Create breast cancer diagnosis"""
-        
+        """Create breast cancer diagnosis and return diagnosis_date"""
         # Primary diagnosis
         diagnosis_concepts = [4112853, 4263086, 4180790]  # General BC, IDC, ILC
         primary_concept = random.choice(diagnosis_concepts)
-        
         # Diagnosis date (within last 5 years)
         days_ago = random.randint(30, 1825)  # 30 days to 5 years ago
         diagnosis_date = date.today() - timedelta(days=days_ago)
-        
         ConditionOccurrence.objects.create(
             person=person,
             condition_concept_id=primary_concept,
@@ -251,12 +238,10 @@ class Command(BaseCommand):
             condition_type_concept_id=32020,  # EHR
             condition_source_value=f"ICD-10-CM:{random.choice(['C50.9', 'C50.1', 'C50.2'])}"
         )
-        
         # Stage (separate condition)
         stages = ['Stage I', 'Stage II', 'Stage III', 'Stage IV']
         stage_weights = [25, 35, 25, 15]  # Distribution of stages
         stage = random.choices(stages, weights=stage_weights)[0]
-        
         ConditionOccurrence.objects.create(
             person=person,
             condition_concept_id=35917532,  # Breast cancer stage
@@ -264,6 +249,7 @@ class Command(BaseCommand):
             condition_type_concept_id=32020,
             condition_source_value=stage
         )
+        return diagnosis_date
 
     def create_lab_values(self, person):
         """Create laboratory values"""
@@ -301,25 +287,21 @@ class Command(BaseCommand):
                     measurement_type_concept_id=32856  # Lab result
                 )
 
-    def create_biomarkers(self, person):
+    def create_biomarkers(self, person, diagnosis_date=None):
         """Create breast cancer biomarkers"""
-        
-        diagnosis_date = date.today() - timedelta(days=random.randint(30, 1825))
-        
+        if diagnosis_date is None:
+            diagnosis_date = date.today() - timedelta(days=random.randint(30, 1825))
         # Hormone receptors
         er_status = random.choices(['Positive', 'Negative'], weights=[75, 25])[0]
         pr_status = random.choices(['Positive', 'Negative'], weights=[65, 35])[0]
-        
         # HER2 status
         her2_status = random.choices(['Positive', 'Negative', 'Equivocal'], weights=[20, 75, 5])[0]
-        
         # Create biomarker measurements
         biomarkers = [
             (3024128, 'ER', er_status),
             (3035995, 'PR', pr_status),
             (36769180, 'HER2', her2_status),
         ]
-        
         for concept_id, name, status in biomarkers:
             Measurement.objects.create(
                 person=person,
@@ -330,12 +312,10 @@ class Command(BaseCommand):
                 measurement_source_value=status,
                 measurement_type_concept_id=32856
             )
-        
         # Tumor markers (if indicated)
         if random.random() < 0.7:  # 70% have tumor markers
             ca_15_3 = random.uniform(5, 150)  # Normal < 30
             ca_27_29 = random.uniform(5, 100)  # Normal < 38
-            
             for concept_id, value, name in [(3007220, ca_15_3, 'CA 15-3'), (3009261, ca_27_29, 'CA 27.29')]:
                 Measurement.objects.create(
                     person=person,
@@ -479,27 +459,23 @@ class Command(BaseCommand):
                 treatment_status=random.choice(['Completed', 'Ongoing', 'Discontinued'])
             )
 
-    def create_procedures(self, person):
+    def create_procedures(self, person, diagnosis_date=None):
         """Create surgical and radiation procedures"""
-        
-        diagnosis_date = date.today() - timedelta(days=random.randint(30, 1825))
-        
+        if diagnosis_date is None:
+            diagnosis_date = date.today() - timedelta(days=random.randint(30, 1825))
         # Surgery (90% have surgery)
         if random.random() < 0.9:
             surgery_type = random.choices(
                 [4052536, 4273629],  # Lumpectomy, Mastectomy
                 weights=[60, 40]
             )[0]
-            
             surgery_date = diagnosis_date + timedelta(days=random.randint(7, 60))
-            
             ProcedureOccurrence.objects.create(
                 person=person,
                 procedure_concept_id=surgery_type,
                 procedure_datetime=surgery_date,
                 procedure_type_concept_id=32818
             )
-            
             # Lymph node dissection (70% of surgery patients)
             if random.random() < 0.7:
                 ProcedureOccurrence.objects.create(
@@ -508,11 +484,9 @@ class Command(BaseCommand):
                     procedure_datetime=surgery_date,
                     procedure_type_concept_id=32818
                 )
-        
         # Radiation therapy (75% receive radiation)
         if random.random() < 0.75:
             radiation_start = diagnosis_date + timedelta(days=random.randint(30, 120))
-            
             ProcedureOccurrence.objects.create(
                 person=person,
                 procedure_concept_id=4048120,  # Radiation therapy
@@ -570,11 +544,10 @@ class Command(BaseCommand):
             observation_type_concept_id=32817
         )
 
-    def create_episodes(self, person):
+    def create_episodes(self, person, diagnosis_date=None):
         """Create episode tracking for treatment phases"""
-        
-        diagnosis_date = date.today() - timedelta(days=random.randint(30, 1825))
-        
+        if diagnosis_date is None:
+            diagnosis_date = date.today() - timedelta(days=random.randint(30, 1825))
         # Primary treatment episode
         episode = Episode.objects.create(
             person=person,
@@ -585,7 +558,6 @@ class Command(BaseCommand):
             episode_number=1,
             episode_type='primary_diagnosis'
         )
-        
         # Link major events to episode
         conditions = ConditionOccurrence.objects.filter(person=person)
         for condition in conditions:
